@@ -55,6 +55,25 @@ V takovém případě napájej ESP32 zvlášť (powerbanka / USB / vlastní
 5V regulátor). GND musí být propojená mezi ESP32, L298N a senzory,
 i když je napájení oddělené.
 
+## Struktura projektu
+
+```
+line_follower/
+  line_follower.ino   <- firmware (PID, motory, senzory, API)
+  data/
+    index.html        <- webová stránka - uprav klidně jen tenhle soubor
+```
+
+Webová stránka **není** součástí .ino souboru. Žije jako samostatný
+`index.html` v podsložce `data/` a ESP32 ji čte za běhu z vlastní
+flash paměti (LittleFS souborový systém). Díky tomu:
+
+- Když chceš změnit vzhled/rozložení stránky, staci editovat
+  `data/index.html` - nemusíš se prokousat celým C++ kódem.
+- Po úpravě stačí nahrát **jen filesystem** (viz níže), ne celý
+  firmware - je to rychlejší a nehrozí, že si omylem rozbiješ logiku
+  robota.
+
 ## Instalace
 
 1. V Arduino IDE otevři **Soubory → Předvolby** a do "Additional Board
@@ -63,7 +82,34 @@ i když je napájení oddělené.
 2. **Nástroje → Deska → Správce desek** → vyhledej `esp32` (Espressif
    Systems) → nainstaluj verzi **3.0.0 nebo vyšší** (kvůli `ledcAttach`).
 3. Vyber svoji desku (např. "ESP32 Dev Module").
-4. Otevři `line_follower.ino` a nahraj do ESP32.
+4. Otevři `line_follower.ino` a nahraj do ESP32 (klasické tlačítko
+   Upload - nahraje se jen samotný firmware, **ne** webová stránka).
+
+## Nahrání webové stránky (LittleFS)
+
+Webová stránka (`data/index.html`) se do ESP32 nahrává zvlášť,
+samostatným nástrojem - ne přes běžné tlačítko Upload.
+
+**Arduino IDE 2.x:**
+
+1. Nainstaluj plugin **arduino-littlefs-upload**:
+   https://github.com/earlephilhower/arduino-littlefs-upload
+   (stlač "Releases" vpravo, stahni `.vsix` soubor a ulož ho do
+   složky `~/Documents/Arduino/plugins/` - pokud složka `plugins`
+   neexistuje, vytvoř ji ručně). Pak Arduino IDE restartuj.
+2. Otevři sketch `line_follower.ino`.
+3. Stiskni **Ctrl+Shift+P** (nebo Cmd+Shift+P na Macu) a napiš
+   "Upload LittleFS to Pico/ESP8266/ESP32" - vyber tuto akci.
+4. Nástroj zabalí obsah složky `data/` a nahraje ho do ESP32.
+
+**Důležité - Partition Scheme:** V menu **Nástroje → Partition
+Scheme** vyber nějaké schéma, které obsahuje SPIFFS/LittleFS prostor,
+např. **"Default 4MB with spiffs"**. Bez toho není pro webovou
+stránku kam ukládat.
+
+Poté když upravíš `data/index.html`, stačí zopakovat jen krok 3
+(LittleFS upload) - firmware (.ino) se přitom vůbec nemusí
+překompilovávat ani nahrávat znovu.
 
 ## Kalibrace senzorů
 
@@ -82,6 +128,19 @@ Přilož robota nad černou čáru:
 3. Uvidíš 5 senzorů (zelené = vidí čáru), aktuální error a posuvníky
    pro Kp, Ki, Kd a rychlost.
 4. Polož robota na čáru a stiskni **START**.
+
+## Ukládání nastavení (přežije restart)
+
+Posuvníky mění hodnoty jen v paměti RAM - hned se projeví v jízdě,
+ale po odpojení napájení by se ztratily. Když naladiš hodnoty, které
+se ti líbí, stiskni na webu tlačítko **"Uložit nastavení natrvalo"**.
+Hodnoty (Kp, Ki, Kd, rychlost) se uloží do trvalé paměti ESP32 (NVS /
+Preferences) a po každém dalším restartu/zapnutí se automaticky
+nahrají zpět místo výchozích hodnot z kódu.
+
+Nešetři tlačítko na každou malé úpravu posuvníku - flash paměť má
+životnost cca 100 000 zápisů, takže ulož až když jsi s nastavením
+spokojený (ne po každém posunutí slideru).
 
 ## Ladění PID (doporučený postup)
 
@@ -106,7 +165,6 @@ příslušného IN1/IN2 nebo IN3/IN4.
 ## Možná rozšíření
 
 - Přidat ultrazvukový senzor (HC-SR04) pro zastavení před překážkou.
-- Ukládat nastavení PID do EEPROM/Preferences, aby přežilo restart.
 - Připojit ESP32 do domácí WiFi (STA mód) místo AP, aby šel ovládat
   i mimo dosah jeho vlastní sítě.
 - Přidat tlačítko/OLED displej přímo na robotovi pro rychlé zapnutí

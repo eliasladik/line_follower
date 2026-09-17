@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line Follower</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; background:#111; color:#eee; margin:0; padding:16px; }
+  h1 { font-size:20px; text-align:center; margin-bottom:4px; }
+  .card { background:#1c1c1c; border-radius:12px; padding:16px; margin-bottom:14px; }
+  .sensors { display:flex; justify-content:space-between; gap:6px; }
+  .sensor { flex:1; height:60px; border-radius:8px; background:#333; display:flex; align-items:flex-end; justify-content:center; transition: background 0.15s; }
+  .sensor.on { background:#2ecc71; }
+  label { display:block; margin-top:10px; font-size:14px; color:#aaa; }
+  input[type=range] { width:100%; }
+  .val { float:right; color:#2ecc71; font-weight:bold; }
+  button { width:100%; padding:14px; font-size:16px; border:none; border-radius:10px; margin-top:8px; font-weight:bold; }
+  #toggleBtn.stopped { background:#2ecc71; color:#000; }
+  #toggleBtn.running { background:#e74c3c; color:#fff; }
+  .status { text-align:center; font-size:13px; color:#888; margin-top:6px; }
+</style>
+</head>
+<body>
+  <h1>🤖 Line Follower</h1>
+
+  <div class="card">
+    <div class="sensors" id="sensors">
+      <div class="sensor"></div><div class="sensor"></div><div class="sensor"></div>
+      <div class="sensor"></div><div class="sensor"></div>
+    </div>
+    <div class="status" id="errText">error: 0</div>
+  </div>
+
+  <div class="card">
+    <label>Kp <span class="val" id="kpVal">0</span></label>
+    <input type="range" id="kp" min="0" max="50" step="0.5" oninput="onChange()">
+
+    <label>Ki <span class="val" id="kiVal">0</span></label>
+    <input type="range" id="ki" min="0" max="5" step="0.1" oninput="onChange()">
+
+    <label>Kd <span class="val" id="kdVal">0</span></label>
+    <input type="range" id="kd" min="0" max="30" step="0.5" oninput="onChange()">
+
+    <label>Rychlost <span class="val" id="spVal">0</span></label>
+    <input type="range" id="sp" min="0" max="255" step="5" oninput="onChange()">
+
+    <button id="saveBtn" onclick="saveSettings()" style="background:#3498db;color:#fff;">Uložit nastavení natrvalo</button>
+    <div class="status" id="saveStatus"></div>
+  </div>
+
+  <button id="toggleBtn" onclick="toggleRun()">START</button>
+
+<script>
+let debounceTimer = null;
+
+function onChange() {
+  document.getElementById('kpVal').innerText = document.getElementById('kp').value;
+  document.getElementById('kiVal').innerText = document.getElementById('ki').value;
+  document.getElementById('kdVal').innerText = document.getElementById('kd').value;
+  document.getElementById('spVal').innerText = document.getElementById('sp').value;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(sendSettings, 150);
+}
+
+function sendSettings() {
+  const kp = document.getElementById('kp').value;
+  const ki = document.getElementById('ki').value;
+  const kd = document.getElementById('kd').value;
+  const sp = document.getElementById('sp').value;
+  fetch(`/set?kp=${kp}&ki=${ki}&kd=${kd}&speed=${sp}`);
+}
+
+function saveSettings() {
+  sendSettings();
+  fetch('/save').then(() => {
+    const s = document.getElementById('saveStatus');
+    s.innerText = 'Uloženo ✓';
+    setTimeout(() => { s.innerText = ''; }, 1500);
+  });
+}
+
+function toggleRun() {
+  fetch('/toggle').then(r => r.json()).then(d => updateRunUI(d.running));
+}
+
+function updateRunUI(running) {
+  const btn = document.getElementById('toggleBtn');
+  btn.innerText = running ? 'STOP' : 'START';
+  btn.className = running ? 'running' : 'stopped';
+}
+
+function poll() {
+  fetch('/status').then(r => r.json()).then(d => {
+    for (let i = 0; i < 5; i++) {
+      document.getElementById('sensors').children[i].className =
+        'sensor' + (d.s[i] ? ' on' : '');
+    }
+    document.getElementById('errText').innerText = 'error: ' + d.error.toFixed(2);
+    document.getElementById('kp').value = d.kp;
+    document.getElementById('ki').value = d.ki;
+    document.getElementById('kd').value = d.kd;
+    document.getElementById('sp').value = d.speed;
+    document.getElementById('kpVal').innerText = d.kp;
+    document.getElementById('kiVal').innerText = d.ki;
+    document.getElementById('kdVal').innerText = d.kd;
+    document.getElementById('spVal').innerText = d.speed;
+    updateRunUI(d.running);
+  });
+}
+setInterval(poll, 300);
+poll();
+</script>
+</body>
+</html>
